@@ -1,0 +1,118 @@
+
+schema: 1
+host: www.gosc.pl
+method: GET
+protocol: https
+headers:
+  accept-encoding: gzip, deflate, br
+  accept-language: pl,en-US;q=0.9,en;q=0.8
+  accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9
+  user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36
+
+checks:
+
+  - request: /
+    response:
+      - ValidResponse
+      - validator: HasHeaders
+        headers:
+          content-type: text/html; charset=utf-8
+          -content-encoding: gzip
+    checks:
+      - request:
+          src: ParseHTML
+          selector: html head meta[property="og:image"]
+          action: ReadProperty
+          property: content
+        response:
+          - ValidResponse
+          - validator: ValidImage
+            min_size: 100x100
+
+  - request: /favicon.ico
+    response:
+      - ValidResponse
+      - validator: ValidImage
+        format: ICO
+      - ValidFavicon
+
+  - request: /robots.txt
+    response:
+      - ValidResponse
+      - ValidText
+      - ValidRobotsTxt
+
+  - request: /sitemap.xml
+    response:
+      - ValidResponse
+      - ValidXML
+    checks:
+      - request:
+          src: ParseHTML
+          selector: sitemapindex sitemap:first-of-type loc
+          action: ReadContent
+        response:
+          - ValidResponse
+          - UnGzip
+        checks:
+          - request:
+              src: ParseXML
+              selector: urlset url:first-of-type loc
+              action: ReadContent
+            response:
+              - ValidResponse
+              - validator: HasHeaders
+                headers:
+                  content-type: text/html; charset=utf-8
+                  -content-encoding: gzip
+            checks:
+              - request:
+                  src: ParseHTML
+                  selector: html head meta[property="og:image"]
+                  action: ReadProperty
+                  property: content
+                response:
+                  - ValidResponse
+                  - validator: ValidImage
+                    min_size: 100x100
+
+  - title: Find an article's image and request it with different webp support
+    request: /doc/6409780.Koniec-antyklerykalnego-pisma
+    response:
+      - ValidResponse
+      - validator: HasHeaders
+        headers:
+          content-type: text/html; charset=utf-8
+          -content-encoding: gzip
+      - validator: ValidContent
+        min_length: 40000
+    checks:
+      - title: "Request an image with default headers (accept: ...image/webp...)"
+        request:
+          src: ParseHTML
+          selector: .doc-gallery__img a img
+          action: ReadProperty
+          property: src
+        response:
+          - ValidResponse
+          - validator: HasHeaders
+            headers:
+              content-type: image/webp
+          - validator: ValidImage
+            min_size: 400x400
+      - title: "Request an image with changed headers, without (accept: ...image/webp...)"
+        request:
+          src: ParseHTML
+          selector: .doc-gallery__img a img
+          action: ReadProperty
+          property: src
+          headers:
+            accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9
+        response:
+          - ValidResponse
+          - validator: HasHeaders
+            headers:
+              content-type: image/jpeg
+          - validator: ValidImage
+            min_size: 400x400
+

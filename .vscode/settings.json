@@ -1,0 +1,43 @@
+{
+	"editor.useTabStops": false,
+	"editor.insertSpaces": false,
+
+	"files.exclude": {
+		"**/__pycache__": true,
+		"**/.directory": true,
+		"**/.pyc": true,
+		"**/.pyo": true,
+		"**/.pytest_cache": true,
+		"**/.sass-cache": true,
+		"**/node_modules": true,
+		"tmp": true
+	},
+	"python.jediEnabled": false,
+	"files.watcherExclude": {
+		"**/venv/**": true
+	},
+
+	"python.linting.enabled": true,
+	"python.linting.banditEnabled": true,
+	"python.linting.pylintEnabled": true,
+	"python.linting.pycodestyleEnabled": true,
+	"python.linting.pycodestyleArgs": [
+		"--ignore=E128,W191,E501,E126,E123,E117"
+	],
+	"python.formatting.autopep8Args": [
+		"--ignore=W191,E101,E111,E11,E121,E122",
+		"--max-line-length=300"
+	],
+
+	"python.pythonPath": "venv/bin/python",
+
+	"jshint.enable": false,
+	"eslint.run": "onSave",
+	"eslint.alwaysShowStatus": true,
+	"eslint.validate":[
+		"javascript",
+		"javascriptreact"
+	],
+	"javascript.validate.enable": false,
+	"python.languageServer": "Microsoft"
+}
