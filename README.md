@@ -1,7 +1,7 @@
 # watchfor
 CLI application for monitoring online services
 
-## Installation:
+## Installation
 ```
 git clone 'https://github.com/tru-software/watchfor'
 cd watchfor
@@ -15,7 +15,7 @@ virtualenv -p python3.8 venv
 ./venv/bin/python -m watchfor check -d ./tests/data1/
 ```
 
-## Tests:
+## Tests
 ```
 ./venv/bin/ptw watchfor -- watchfor/tests
 ```

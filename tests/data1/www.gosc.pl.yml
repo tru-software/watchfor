@@ -18,7 +18,7 @@ checks:
       - validator: HasHeaders
         headers:
           content-type: text/html; charset=utf-8
-          -content-encoding: gzip
+          content-encoding: gzip
     checks:
       - request:
           src: ParseHTML
@@ -65,7 +65,7 @@ checks:
               - validator: HasHeaders
                 headers:
                   content-type: text/html; charset=utf-8
-                  -content-encoding: gzip
+                  content-encoding: gzip
             checks:
               - request:
                   src: ParseHTML
@@ -84,7 +84,7 @@ checks:
       - validator: HasHeaders
         headers:
           content-type: text/html; charset=utf-8
-          -content-encoding: gzip
+          content-encoding: gzip
       - validator: ValidContent
         min_length: 40000
     checks:
@@ -117,3 +117,11 @@ checks:
           - validator: ValidImage
             min_size: 400x400
 
+  - title: Try HTTP404
+    request: /--bad-path--
+    response:
+      - validator: ValidResponse
+        status:
+          - 404
+      - validator: ValidContent
+        max_length: 40000

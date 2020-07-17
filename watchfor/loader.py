@@ -97,29 +97,37 @@ class ProcessorV1:
 	def process_checks(self, url, content, checks, default_method, default_headers):
 
 		for cfg in checks:
-			for url_path, method, headers in self.request_factory(cfg['request'], content, default_method, default_headers):
-				if not url_path:
-					raise ConfError(f"Invalid request URL: {cfg['request']}")
+			try:
+				for url_path, method, headers in self.request_factory(cfg['request'], content, default_method, default_headers):
+					if not url_path:
+						raise ConfError(f"Invalid request URL: {cfg['request']}")
 
-				if url_path.startswith(('http:', 'https:')):
-					pass
-				elif url_path.startswith('//'):
-					# TODO: get protocol from url
-					url_path = 'https:' + url_path
-				elif url_path.startswith('/'):
-					# TODO: remove path from url
-					url_path = url + url_path
-				else:
-					url_path = url + '/' + url_path
+					if url_path.startswith(('http:', 'https:')):
+						pass
+					elif url_path.startswith('//'):
+						# TODO: get protocol from url
+						url_path = 'https:' + url_path
+					elif url_path.startswith('/'):
+						# TODO: remove path from url
+						url_path = url + url_path
+					else:
+						url_path = url + '/' + url_path
 
-				echo_time()
-				click.secho("-" * 80, fg="yellow")
-
-				if 'title' in cfg:
 					echo_time()
-					click.secho(cfg['title'], fg="bright_white", bold=True)
+					click.secho("-" * 80, fg="yellow")
 
-				self.check_url(cfg, url_path, method, headers)
+					if 'title' in cfg:
+						echo_time()
+						click.secho(cfg['title'], fg="bright_white", bold=True)
+
+					self.check_url(cfg, url_path, method, headers)
+			except ConfError as ex:
+				echo_time()
+				click.secho('Cannot open config for request: ', fg='red', nl=False)
+				click.secho(repr(cfg['request']), fg="bright_yellow")
+				echo_time()
+				click.secho(str(ex), fg='bright_white', bg="red")
+
 
 	def request_factory(self, request, prev_content, method, headers):
 		if isinstance(request, str):
@@ -137,6 +145,7 @@ class ProcessorV1:
 				# https://facelessuser.github.io/soupsieve/selectors/pseudo-classes/
 				nodes = html.select(request['selector'])
 				if len(nodes) == 0:
+					# print(prev_content)
 					raise ConfError(f"HTML node not found: {request['selector']}")
 				if request['action'] == 'ReadProperty':
 					for node in nodes:
@@ -261,9 +270,9 @@ class ResponseValidators:
 
 		return None
 
-	def ValidResponse(self):
-		if self.response.status < 200 or self.response.status > 210:
-			raise ValueError(f"Invalid response status: {self.response.status}")
+	def ValidResponse(self, status=(200, 201)):
+		if self.response.status not in status:
+			raise ValueError(f"Invalid response status: {self.response.status}, expected one of {status}")
 
 	def ValidImage(self, min_size=None, format=None):
 		if not self.headers['content-type'].startswith("image/"):
@@ -288,11 +297,16 @@ class ResponseValidators:
 				if img.format != format:
 					raise ValueError(f"Image \"{img.format}\" different then expected {format}")
 
-	def ValidContent(self, min_length=None):
+	def ValidContent(self, min_length=None, max_length=None):
 		if min_length is not None:
 
 			if len(self.content) < min_length:
 				raise ValueError(f"Content length \"{len(self.content)}\" is less then expected {min_length}")
+
+		if max_length is not None:
+
+			if len(self.content) > max_length:
+				raise ValueError(f"Content length \"{len(self.content)}\" is longer then expected {max_length}")
 
 	def ValidText(self):
 		if not self.headers['content-type'].startswith("text/"):
