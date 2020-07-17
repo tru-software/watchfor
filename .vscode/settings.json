@@ -39,5 +39,8 @@
 		"javascriptreact"
 	],
 	"javascript.validate.enable": false,
-	"python.languageServer": "Microsoft"
+	"python.languageServer": "Microsoft",
+	"python.linting.banditArgs": [
+		"-s B101"
+	]
 }

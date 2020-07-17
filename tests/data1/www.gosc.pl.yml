@@ -3,6 +3,7 @@ schema: 1
 host: www.gosc.pl
 method: GET
 protocol: https
+timeout: 10.0
 headers:
   accept-encoding: gzip, deflate, br
   accept-language: pl,en-US;q=0.9,en;q=0.8
