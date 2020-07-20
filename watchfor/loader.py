@@ -6,7 +6,10 @@ import click
 import urllib3
 import bs4
 import gzip
+from urllib.parse import urljoin
 from PIL import Image
+
+from typing import List, Dict
 
 from io import BytesIO
 
@@ -19,6 +22,13 @@ class ConfError(ValueError):
 
 def echo_time():
 	click.secho(datetime.datetime.now().strftime("%Y.%m.%d %H:%M:%S "), fg="cyan", nl=False)
+
+
+def named(name):
+	def wrap(f):
+		f.get_name = lambda: name
+		return f
+	return wrap
 
 
 def open_dir(data):
@@ -68,6 +78,9 @@ class ProcessorV1:
 		self.http_pool = urllib3.PoolManager(10, timeout=urllib3.Timeout(connect=timeout, read=timeout))
 		self.cfg = cfg
 
+		self.default_method = 'GET'
+		self.default_headers = {}
+
 	def execute(self):
 
 		data = self.cfg
@@ -78,9 +91,9 @@ class ProcessorV1:
 		url = 'https://{}'.format(data['host'])
 		click.secho(url, fg='bright_white', bg="blue")
 
-		method = data.get('method', 'GET')
-		if method not in ('GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'):
-			raise ConfError(f"Invalid method: {method}")
+		self.default_method = data.get('method', 'GET')
+		if self.default_method not in ('GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'):
+			raise ConfError(f"Invalid method: {self.default_method}")
 
 		headers = {}
 		if 'headers' in data:
@@ -91,27 +104,21 @@ class ProcessorV1:
 			for k, v in data.get('headers').items():
 				headers[k] = v
 
-		if 'checks' in data:
-			self.process_checks(url, None, data['checks'], method, headers)
+		self.default_headers = headers
 
-	def process_checks(self, url, content, checks, default_method, default_headers):
+		if 'checks' in data:
+			self.process_checks(url, data['checks'])
+
+	def process_checks(self, base_url, checks):
 
 		for cfg in checks:
 			try:
-				for url_path, method, headers in self.request_factory(cfg['request'], content, default_method, default_headers):
-					if not url_path:
-						raise ConfError(f"Invalid request URL: {cfg['request']}")
+				for url_path, method, headers in self.request_factory(cfg['request'], self.default_method, self.default_headers):
 
-					if url_path.startswith(('http:', 'https:')):
-						pass
-					elif url_path.startswith('//'):
-						# TODO: get protocol from url
-						url_path = 'https:' + url_path
-					elif url_path.startswith('/'):
-						# TODO: remove path from url
-						url_path = url + url_path
-					else:
-						url_path = url + '/' + url_path
+					# if not url_path:
+					# 	raise ConfError(f"Invalid request URL: {cfg['request']}")
+
+					url = urljoin(base_url, url_path)
 
 					echo_time()
 					click.secho("-" * 80, fg="yellow")
@@ -120,7 +127,27 @@ class ProcessorV1:
 						echo_time()
 						click.secho(cfg['title'], fg="bright_white", bold=True)
 
-					self.check_url(cfg, url_path, method, headers)
+					response = self.call_url(cfg, url, method, headers)
+					processor = ResponseProcessor(self, url, response)
+
+					for response_cfg in cfg['response']:
+
+						functor = processor.create(response_cfg)
+						if not functor:
+							raise ConfError(f"Invalid response processor: {repr(response_cfg)}")
+
+						try:
+							functor()
+							self.on_success(response, functor)
+
+						except ValueError as ex:
+
+							self.on_failure(headers, response, functor, ex)
+							break
+
+					# if 'checks' in cfg:
+					# 	self.process_checks(url, processor.content, cfg['checks'], method, headers)
+
 			except ConfError as ex:
 				echo_time()
 				click.secho('Cannot open config for request: ', fg='red', nl=False)
@@ -128,67 +155,27 @@ class ProcessorV1:
 				echo_time()
 				click.secho(str(ex), fg='bright_white', bg="red")
 
+	def request_factory(self, request, method, headers):
 
-	def request_factory(self, request, prev_content, method, headers):
+		if request is None:
+			yield '', method, headers
+			return
+
 		if isinstance(request, str):
 			yield request, method, headers
 			return
+
 		elif isinstance(request, dict):
 
 			if 'headers' in request:
 				headers = {**headers, **request['headers']}
 
-			if request['src'] in ('ParseHTML', 'ParseXML'):
-				html = bs4.BeautifulSoup(prev_content, features="html.parser" if request['src'] == 'ParseHTML' else 'lxml')
-
-				# https://www.crummy.com/software/BeautifulSoup/bs4/doc/#css-selectors
-				# https://facelessuser.github.io/soupsieve/selectors/pseudo-classes/
-				nodes = html.select(request['selector'])
-				if len(nodes) == 0:
-					# print(prev_content)
-					raise ConfError(f"HTML node not found: {request['selector']}")
-				if request['action'] == 'ReadProperty':
-					for node in nodes:
-						yield node[request['property']], method, headers
-				elif request['action'] == 'ReadContent':
-					for node in nodes:
-						yield node.getText(), method, headers
-				else:
-					raise ConfError(f"Invalid action: {request['action']}")
-
-				return
+			yield request.get('src') or '', request.get('method') or method, headers
+			return
 
 		raise ConfError(f"Invalid request: {repr(request)}")
 
-	def on_success(self, response, functor):
-		echo_time()
-		click.secho(" ✓ Success validation: ", fg='green', nl=False)
-
-		# FIXME: In case of HasHeaders the name is "lambda"
-		click.secho(functor.__name__, fg='bright_green')
-
-	def on_failure(self, request_headers, response, functor, ex):
-		echo_time()
-		click.secho(" 🚫 Validation failed: ", fg='bright_red', nl=False)
-		click.secho(str(ex), fg='bright_white', bg="red")
-
-		echo_time()
-		click.secho(" Request headers ", fg='bright_white', bg="green", bold=True)
-		for k, v in sorted(request_headers.items(), key=lambda i: i[0]):
-			echo_time()
-			click.secho(f"  {k}", fg='bright_cyan', nl=False)
-			click.secho(f"=", fg='bright_white', nl=False)
-			click.secho(f"{v}", fg='bright_magenta')
-
-		echo_time()
-		click.secho(" Response headers ", fg='bright_white', bg="blue", bold=True)
-		for k, v in sorted(response.headers.items(), key=lambda i: i[0]):
-			echo_time()
-			click.secho(f"  {k}", fg='bright_cyan', nl=False)
-			click.secho(f"=", fg='bright_white', nl=False)
-			click.secho(f"{v}", fg='bright_magenta')
-
-	def check_url(self, cfg, url, request_method, request_headers):
+	def call_url(self, cfg, url, request_method, request_headers):
 
 		echo_time()
 		click.secho('Requesting: ', fg='bright_magenta', nl=False)
@@ -228,52 +215,126 @@ class ProcessorV1:
 		else:
 			click.secho(f"[{int(diff * 1000)}ms]", fg='bright_green')
 
-		validator = ResponseValidators(url, response)
+		return response
 
-		for response_check in cfg['response']:
+	def on_success(self, response, functor):
+		echo_time()
+		click.secho(" ✓ Success validation: ", fg='green', nl=False)
 
-			functor = validator.create(response_check)
-			if not functor:
-				raise ConfError(f"Invalid response validator: {repr(response_check)}")
+		click.secho(functor.get_name() if hasattr(functor, 'get_name') else str(functor), fg='bright_green')
 
-			try:
-				functor()
-				self.on_success(response, functor)
+	def on_failure(self, request_headers, response, functor, ex):
+		echo_time()
+		click.secho(" 🚫 Validation failed: ", fg='bright_red', nl=False)
+		click.secho(str(ex), fg='bright_white', bg="red")
 
-			except ValueError as ex:
+		echo_time()
+		click.secho(" Request headers ", fg='bright_white', bg="green", bold=True)
+		for k, v in sorted(request_headers.items(), key=lambda i: i[0]):
+			echo_time()
+			click.secho(f"  {k}", fg='bright_cyan', nl=False)
+			click.secho(f"=", fg='bright_white', nl=False)
+			click.secho(f"{v}", fg='bright_magenta')
 
-				self.on_failure(request_headers, response, functor, ex)
-				break
+		echo_time()
+		click.secho(" Response headers ", fg='bright_white', bg="blue", bold=True)
+		for k, v in sorted(response.headers.items(), key=lambda i: i[0]):
+			echo_time()
+			click.secho(f"  {k}", fg='bright_cyan', nl=False)
+			click.secho(f"=", fg='bright_white', nl=False)
+			click.secho(f"{v}", fg='bright_magenta')
 
-		if 'checks' in cfg:
-			self.process_checks(url, validator.content, cfg['checks'], request_method, request_headers)
+
+class ReaderBS4:
+
+	queries: List[Dict]
+
+	def __init__(self, response, content: bytes, features="html.parser", queries=[], query=None):
+
+		self.response = response
+		self.content = content
+		self.html = bs4.BeautifulSoup(self.content, features=features)
+
+		self.queries = list(queries) + [query] if query else queries
+		if not self.queries:
+			raise ConfError(f"HTML/XML readers require at least one selector")
+
+	def __call__(self):
+
+		for query in self.queries:
+
+			# https://www.crummy.com/software/BeautifulSoup/bs4/doc/#css-selectors
+			# https://facelessuser.github.io/soupsieve/selectors/pseudo-classes/
+			nodes = self.html.select(query['selector'])
+			if len(nodes) == 0:
+				if query.get('optional'):
+					continue
+				raise ConfError(f"HTML node not found: {query['selector']}")
+
+			action = getattr(self, query['action'], None)
+			if not action:
+				raise ConfError(f"Invalid action: {query['action']}")
+
+			if 'checks' in query:
+				for value in action(nodes, query):
+					url = urljoin(self.response.url, value)
+					self.response.proccess.process_checks(url, query['checks'])
+
+	def ReadProperty(self, nodes, query):
+		for node in nodes:
+			yield node[query['property']]
+
+	def ReadContent(self, nodes, query):
+		for node in nodes:
+			yield node.getText()
+
+	def get_name(self):
+		return f"ReaderBS4(\"{self.queries[0]['selector']}\")"
 
 
-class ResponseValidators:
+class ResponseProcessor:
 
-	def __init__(self, url, response):
+	def __init__(self, proccess: ProcessorV1, url, response):
 		self.url = url
+		self.proccess = proccess
 		self.headers = response.headers
 		self.content = response.data
 		self.response = response
 
 	def create(self, cfg):
+
 		if isinstance(cfg, str):
 			return getattr(self, cfg)
 
 		if isinstance(cfg, dict):
 
-			validator = getattr(self, cfg['validator'])
-			args = dict(cfg)
-			del args['validator']
-			return lambda: validator(**args)
+			if 'validator' in cfg:
+				validator = getattr(self, cfg['validator'])
+				args = dict(cfg)
+				del args['validator']
+				return named(cfg['validator'])(lambda: validator(**args))
+			elif 'reader' in cfg:
+				reader = getattr(self, cfg['reader'])
+				args = dict(cfg)
+				del args['reader']
+				return reader(**args)
+			else:
+				raise ConfError(f"Expected validator of follower")
 
 		return None
 
+	def ParseHTML(self, *args, **kwargs):
+		return ReaderBS4(self, self.content, *args, features="html.parser", **kwargs)
+
+	def ParseXML(self, *args, **kwargs):
+		return ReaderBS4(self, self.content, *args, features="lxml", **kwargs)
+
+	@named("ValidResponse")
 	def ValidResponse(self, status=(200, 201)):
 		if self.response.status not in status:
 			raise ValueError(f"Invalid response status: {self.response.status}, expected one of {status}")
 
+	@named("ValidImage")
 	def ValidImage(self, min_size=None, format=None):
 		if not self.headers['content-type'].startswith("image/"):
 			raise ValueError(f"Invalid content-type: {self.headers['content-type']}")
@@ -297,6 +358,7 @@ class ResponseValidators:
 				if img.format != format:
 					raise ValueError(f"Image \"{img.format}\" different then expected {format}")
 
+	@named("ValidContent")
 	def ValidContent(self, min_length=None, max_length=None):
 		if min_length is not None:
 
@@ -308,14 +370,17 @@ class ResponseValidators:
 			if len(self.content) > max_length:
 				raise ValueError(f"Content length \"{len(self.content)}\" is longer then expected {max_length}")
 
+	@named("ValidText")
 	def ValidText(self):
 		if not self.headers['content-type'].startswith("text/"):
 			raise ValueError(f"Invalid content-type: {self.headers['content-type']}")
 
+	@named("ValidXML")
 	def ValidXML(self):
 		if not self.headers['content-type'].startswith("text/xml"):
 			raise ValueError(f"Invalid content-type: {self.headers['content-type']}")
 
+	@named("UnGzip")
 	def UnGzip(self):
 		if not self.headers['content-type'].startswith("application/octet-stream"):
 			raise ValueError(f"Invalid content-type: {self.headers['content-type']}")
@@ -324,15 +389,18 @@ class ResponseValidators:
 		with gzip.GzipFile(fileobj=stream, mode='rb') as fo:
 			self.content = fo.read()
 
+	@named("ValidRobotsTxt")
 	def ValidRobotsTxt(self):
 
 		# TODO: parse self.content as robots.txt
 		pass
 
+	@named("ValidFavicon")
 	def ValidFavicon(self):
 		if not self.headers['content-type'].startswith("image/"):
 			raise ValueError(f"Invalid content-type: {self.headers['content-type']}")
 
+	@named("HasHeaders")
 	def HasHeaders(self, headers):
 
 		for k, v in headers.items():

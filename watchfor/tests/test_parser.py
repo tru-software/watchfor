@@ -4,23 +4,24 @@ from io import StringIO
 import pytest
 import mock
 from pathlib import Path
-from httplib2 import Response
+from urllib3_mock import Responses
 
-# FIXME
-sys.path = [os.path.abspath(os.path.dirname(os.path.abspath(__file__)) + '/../')] + sys.path
-
-import loader  # noqa
+from .. import loader  # noqa
 
 
-def test_no_schema():
+responses = Responses('urllib3')
+
+
+def test_no_schema(mocker):
+
+	mock_call_url = mocker.spy(loader.ProcessorV1, "call_url")
+	mock_execute = mocker.spy(loader.ProcessorV1, "execute")
 
 	data = """host: www.example.pl"""
-	with mock.patch("loader.ProcessorV1.execute", return_value=None) as mock_execute:
-		with mock.patch("loader.ProcessorV1.check_url", return_value=None) as mock_check_url:
-			loader.open_yaml(StringIO(data))
+	loader.open_yaml(StringIO(data))
 
-			assert mock_execute.call_count == 1
-			assert mock_check_url.call_count == 0
+	assert mock_execute.call_count == 1
+	assert mock_call_url.call_count == 0
 
 
 @pytest.fixture(scope="module", params=[0, 1000, None, False, "", {}])
@@ -30,21 +31,21 @@ host: www.example.pl
 """)
 
 
-def test_invalid_schema(invalid_schema):
+def test_invalid_schema(invalid_schema, mocker):
 
 	with pytest.raises(loader.ConfError):
-		with mock.patch("loader.ProcessorV1.check_url", return_value=None):
+		with mock.patch.object(loader.ProcessorV1, "call_url"):
 			loader.open_yaml(invalid_schema)
 
 
-def test_invalid_method():
+def test_invalid_method(mocker):
 
 	data = """schema: 1
 host: www.example.pl
 method: BAD
 """
 	with pytest.raises(loader.ConfError):
-		with mock.patch("loader.ProcessorV1.check_url", return_value=None):
+		with mock.patch.object(loader.ProcessorV1, "call_url"):
 			loader.open_yaml(data)
 
 
@@ -56,14 +57,14 @@ headers: {request.param}
 """)
 
 
-def test_invalid_headers(invalid_headers):
+def test_invalid_headers(invalid_headers, mocker):
 
 	with pytest.raises(loader.ConfError):
-		with mock.patch("loader.ProcessorV1.check_url", return_value=None):
+		with mock.patch.object(loader.ProcessorV1, "call_url"):
 			loader.open_yaml(invalid_headers)
 
 
-def test_valid_headers():
+def test_valid_headers(mocker):
 
 	data = """schema: 1
 host: www.example.pl
@@ -74,5 +75,5 @@ headers:
   user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36
 """  # noqa
 
-	with mock.patch("loader.ProcessorV1.check_url", return_value=None):
+	with mock.patch.object(loader.ProcessorV1, "call_url"):
 		loader.open_yaml(data)

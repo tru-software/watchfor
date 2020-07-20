@@ -19,16 +19,17 @@ checks:
         headers:
           content-type: text/html; charset=utf-8
           content-encoding: gzip
-    checks:
-      - request:
-          src: ParseHTML
+      - reader: ParseHTML
+        query:
           selector: html head meta[property="og:image"]
           action: ReadProperty
           property: content
-        response:
-          - ValidResponse
-          - validator: ValidImage
-            min_size: 100x100
+          checks:
+            - request:
+              response:
+              - ValidResponse
+              - validator: ValidImage
+                min_size: 100x100
 
   - request: /favicon.ico
     response:
@@ -47,35 +48,38 @@ checks:
     response:
       - ValidResponse
       - ValidXML
-    checks:
-      - request:
-          src: ParseHTML
+      - reader: ParseXML
+        query:
           selector: sitemapindex sitemap:first-of-type loc
           action: ReadContent
-        response:
-          - ValidResponse
-          - UnGzip
-        checks:
-          - request:
-              src: ParseXML
-              selector: urlset url:first-of-type loc
-              action: ReadContent
-            response:
-              - ValidResponse
-              - validator: HasHeaders
-                headers:
-                  content-type: text/html; charset=utf-8
-                  content-encoding: gzip
-            checks:
-              - request:
-                  src: ParseHTML
-                  selector: html head meta[property="og:image"]
-                  action: ReadProperty
-                  property: content
-                response:
-                  - ValidResponse
-                  - validator: ValidImage
-                    min_size: 100x100
+          checks:
+            - request:
+              response:
+                - ValidResponse
+                - UnGzip
+                - reader: ParseXML
+                  query:
+                    selector: urlset url:first-of-type loc
+                    action: ReadContent
+                    checks:
+                      - request:
+                        response:
+                          - ValidResponse
+                          - validator: HasHeaders
+                            headers:
+                              content-type: text/html; charset=utf-8
+                              content-encoding: gzip
+                          - reader: ParseHTML
+                            query:
+                              selector: html head meta[property="og:image"]
+                              action: ReadProperty
+                              property: content
+                              checks:
+                                - request:
+                                  response:
+                                    - ValidResponse
+                                    - validator: ValidImage
+                                      min_size: 100x100
 
   - title: Find an article's image and request it with different webp support
     request: /doc/6409780.Koniec-antyklerykalnego-pisma
@@ -87,35 +91,32 @@ checks:
           content-encoding: gzip
       - validator: ValidContent
         min_length: 40000
-    checks:
-      - title: "Request an image with default headers (accept: ...image/webp...)"
-        request:
-          src: ParseHTML
+      - reader: ParseHTML
+        query:
           selector: .doc-gallery__img a img
           action: ReadProperty
           property: src
-        response:
-          - ValidResponse
-          - validator: HasHeaders
-            headers:
-              content-type: image/webp
-          - validator: ValidImage
-            min_size: 400x400
-      - title: "Request an image with changed headers, without (accept: ...image/webp...)"
-        request:
-          src: ParseHTML
-          selector: .doc-gallery__img a img
-          action: ReadProperty
-          property: src
-          headers:
-            accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9
-        response:
-          - ValidResponse
-          - validator: HasHeaders
-            headers:
-              content-type: image/jpeg
-          - validator: ValidImage
-            min_size: 400x400
+          checks:
+            - title: "Request an image with default headers (accept: ...image/webp...)"
+              request:
+              response:
+                - ValidResponse
+                - validator: HasHeaders
+                  headers:
+                    content-type: image/webp
+                - validator: ValidImage
+                  min_size: 400x400
+            - title: "Request an image with changed headers, without (accept: ...image/webp...)"
+              request:
+                headers:
+                  accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9
+              response:
+                - ValidResponse
+                - validator: HasHeaders
+                  headers:
+                    content-type: image/jpeg
+                - validator: ValidImage
+                  min_size: 400x400
 
   - title: Try HTTP404
     request: /--bad-path--
