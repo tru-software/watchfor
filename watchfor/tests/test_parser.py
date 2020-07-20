@@ -4,21 +4,24 @@ from io import StringIO
 import pytest
 import mock
 from pathlib import Path
-from urllib3_mock import Responses
 
-from .. import loader  # noqa
+from .. import loader, collector_memory
 
-
-responses = Responses('urllib3')
+from .test_urllib3 import mocked_responses
 
 
+def open_yaml(data):
+	return loader.Loader(collector_memory.CollectorMemory()).open_yaml(data)
+
+
+@mocked_responses.activate
 def test_no_schema(mocker):
 
 	mock_call_url = mocker.spy(loader.ProcessorV1, "call_url")
 	mock_execute = mocker.spy(loader.ProcessorV1, "execute")
 
 	data = """host: www.example.pl"""
-	loader.open_yaml(StringIO(data))
+	open_yaml(StringIO(data))
 
 	assert mock_execute.call_count == 1
 	assert mock_call_url.call_count == 0
@@ -31,13 +34,15 @@ host: www.example.pl
 """)
 
 
+@mocked_responses.activate
 def test_invalid_schema(invalid_schema, mocker):
 
 	with pytest.raises(loader.ConfError):
 		with mock.patch.object(loader.ProcessorV1, "call_url"):
-			loader.open_yaml(invalid_schema)
+			open_yaml(invalid_schema)
 
 
+@mocked_responses.activate
 def test_invalid_method(mocker):
 
 	data = """schema: 1
@@ -46,7 +51,7 @@ method: BAD
 """
 	with pytest.raises(loader.ConfError):
 		with mock.patch.object(loader.ProcessorV1, "call_url"):
-			loader.open_yaml(data)
+			open_yaml(data)
 
 
 @pytest.fixture(scope="module", params=[0, 1000, None, False, "", []])
@@ -57,13 +62,15 @@ headers: {request.param}
 """)
 
 
+@mocked_responses.activate
 def test_invalid_headers(invalid_headers, mocker):
 
 	with pytest.raises(loader.ConfError):
 		with mock.patch.object(loader.ProcessorV1, "call_url"):
-			loader.open_yaml(invalid_headers)
+			open_yaml(invalid_headers)
 
 
+@mocked_responses.activate
 def test_valid_headers(mocker):
 
 	data = """schema: 1
@@ -76,4 +83,4 @@ headers:
 """  # noqa
 
 	with mock.patch.object(loader.ProcessorV1, "call_url"):
-		loader.open_yaml(data)
+		open_yaml(data)

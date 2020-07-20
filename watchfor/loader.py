@@ -6,6 +6,7 @@ import click
 import urllib3
 import bs4
 import gzip
+from abc import ABC
 from urllib.parse import urljoin
 from PIL import Image
 
@@ -20,10 +21,6 @@ class ConfError(ValueError):
 	pass
 
 
-def echo_time():
-	click.secho(datetime.datetime.now().strftime("%Y.%m.%d %H:%M:%S "), fg="cyan", nl=False)
-
-
 def named(name):
 	def wrap(f):
 		f.get_name = lambda: name
@@ -31,52 +28,86 @@ def named(name):
 	return wrap
 
 
-def open_dir(data):
+class ICollector(ABC):
 
-	for entry in os.listdir(data):
+	def log_open_config(self, cfg_path):
+		pass
 
-		if not entry.endswith(".yml"):
-			continue
+	def log_config_error(self, cfg_path, ex):
+		pass
+
+	def log_start_site(self, url):
+		pass
+
+	def log_start_checks(self, url, cfg):
+		pass
+
+	def log_checks_error(self, cfg, ex):
+		pass
+
+	def log_open_url(self, url, request_method, request_headers):
+		pass
+
+	def log_open_url_timeout(self, url, diff, ex):
+		pass
+
+	def log_open_url_response(self, url, diff, response):
+		pass
+
+	def log_check_success(self, response, functor):
+		pass
+
+	def log_check_failure(self, request_headers, response, functor, ex):
+		pass
+
+
+class Loader:
+
+	def __init__(self, collector: ICollector):
+		self.collector = collector
+
+	def open_dir(self, data):
+
+		for entry in os.listdir(data):
+
+			if not entry.endswith(".yml"):
+				continue
+
+			try:
+				cfg_path = os.path.abspath(os.path.join(data, entry))
+
+				with open(cfg_path) as f:
+					self.open_yaml(f, src=cfg_path)
+
+			except ConfError as ex:
+				self.collector.log_config_error(cfg_path, ex)
+
+	def open_yaml(self, f, src='memory'):
+
+		self.collector.log_open_config(src)
+
+		data = yaml.safe_load(f)
 
 		try:
-			cfg_path = os.path.abspath(os.path.join(data, entry))
+			schema = int(data.get('schema', 1))
+		except (ValueError, TypeError):
+			raise ConfError(f"Invalid schema version number: {data['schema']}")
 
-			echo_time()
-			click.secho('Reading: ', nl=False)
-			click.secho(cfg_path, fg="bright_yellow")
-
-			with open(cfg_path) as f:
-				open_yaml(f)
-
-		except ConfError as ex:
-			echo_time()
-			click.secho('Found error(s) in the file: ', fg='red', nl=False)
-			click.secho(cfg_path + " ", fg="bright_yellow", nl=False)
-			click.secho(str(ex), fg='bright_white', bg="red")
-
-
-def open_yaml(f):
-
-	data = yaml.safe_load(f)
-
-	try:
-		schema = int(data.get('schema', 1))
-	except (ValueError, TypeError):
-		raise ConfError(f"Invalid schema version number: {data['schema']}")
-
-	if schema == 1:
-		ProcessorV1(data).execute()
-	else:
-		raise ConfError(f"Invalid schema version: {schema}")
+		if schema == 1:
+			ProcessorV1(self.collector, data).execute()
+		else:
+			raise ConfError(f"Invalid schema version: {schema}")
 
 
 class ProcessorV1:
 
-	def __init__(self, cfg):
+	def __init__(self, collector: ICollector, cfg: Dict):
+
+		self.cfg = cfg
+		self.collector = collector
 
 		timeout = float(cfg.get('timeout', 10))
-		self.http_pool = urllib3.PoolManager(10, timeout=urllib3.Timeout(connect=timeout, read=timeout))
-		self.cfg = cfg
+		self.http_pool = urllib3.PoolManager(maxsize=10, timeout=urllib3.Timeout(connect=timeout, read=timeout))
 
 		self.default_method = 'GET'
 		self.default_headers = {}
@@ -84,12 +115,9 @@ class ProcessorV1:
 	def execute(self):
 
 		data = self.cfg
-
-		echo_time()
-		click.secho('Site: ', nl=False)
-
 		url = 'https://{}'.format(data['host'])
-		click.secho(url, fg='bright_white', bg="blue")
+
+		self.collector.log_start_site(url)
 
 		self.default_method = data.get('method', 'GET')
 		if self.default_method not in ('GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'):
@@ -120,14 +148,14 @@ class ProcessorV1:
 
 					url = urljoin(base_url, url_path)
 
-					echo_time()
-					click.secho("-" * 80, fg="yellow")
+					self.collector.log_start_checks(url, cfg)
 
-					if 'title' in cfg:
-						echo_time()
-						click.secho(cfg['title'], fg="bright_white", bold=True)
+					try:
+						response = self.call_url(cfg, url, method, headers)
+					except socket.timeout as ex:
+						# TODO: Or maybe timeout is expectedin cfg?
+						continue
 
-					response = self.call_url(cfg, url, method, headers)
 					processor = ResponseProcessor(self, url, response)
 
 					for response_cfg in cfg['response']:
@@ -139,31 +167,20 @@ class ProcessorV1:
 						try:
 							functor()
 							self.on_success(response, functor)
-
 						except ValueError as ex:
-
 							self.on_failure(headers, response, functor, ex)
 							break
 
-					# if 'checks' in cfg:
-					# 	self.process_checks(url, processor.content, cfg['checks'], method, headers)
-
 			except ConfError as ex:
-				echo_time()
-				click.secho('Cannot open config for request: ', fg='red', nl=False)
-				click.secho(repr(cfg['request']), fg="bright_yellow")
-				echo_time()
-				click.secho(str(ex), fg='bright_white', bg="red")
+				self.collector.log_checks_error(cfg, ex)
 
 	def request_factory(self, request, method, headers):
 
 		if request is None:
 			yield '', method, headers
-			return
 
-		if isinstance(request, str):
+		elif isinstance(request, str):
 			yield request, method, headers
-			return
 
 		elif isinstance(request, dict):
 
@@ -171,78 +188,29 @@ class ProcessorV1:
 				headers = {**headers, **request['headers']}
 
 			yield request.get('src') or '', request.get('method') or method, headers
-			return
-
-		raise ConfError(f"Invalid request: {repr(request)}")
+		else:
+			raise ConfError(f"Invalid request: {repr(request)}")
 
 	def call_url(self, cfg, url, request_method, request_headers):
 
-		echo_time()
-		click.secho('Requesting: ', fg='bright_magenta', nl=False)
-		click.secho(f' {request_method} ', fg="blue", nl=False)
-		click.secho(url, fg="bright_yellow")
+		self.collector.log_open_url(url, request_method, request_headers)
 
 		begin = time.time()
 		try:
 			response = self.http_pool.request(request_method, url, headers=request_headers)
 		except socket.timeout as ex:
-			end = time.time()
-			echo_time()
-			click.secho(f"No response: {ex}", fg='bright_white', bg="red")
-			return
+			self.collector.log_open_url_timeout(url, time.time() - begin, ex)
+			raise
 
-		end = time.time()
-
-		echo_time()
-		click.secho(" → Response: ", fg="bright_magenta", nl=False)
-		status = response.status
-		if status >= 500:
-			click.secho(str(status), fg='bright_white', bg="red", nl=False)
-		elif status >= 400:
-			click.secho(str(status), fg='black', bg="bright_yellow", nl=False)
-		elif status >= 300:
-			click.secho(str(status), fg='black', bg="bright_yellow", nl=False)
-		elif status >= 200:
-			click.secho(str(status), fg='bright_white', bg="blue", nl=False)
-
-		click.echo(" ", nl=False)
-
-		diff = end - begin
-		if diff > 2:
-			click.secho(f"[{int(diff * 1000)}ms]", fg='bright_white', bg="red")
-		elif diff > 0.8:
-			click.secho(f"[{int(diff * 1000)}ms]", fg='bright_cyan')
-		else:
-			click.secho(f"[{int(diff * 1000)}ms]", fg='bright_green')
+		self.collector.log_open_url_response(url, time.time() - begin, response)
 
 		return response
 
 	def on_success(self, response, functor):
-		echo_time()
-		click.secho(" ✓ Success validation: ", fg='green', nl=False)
-
-		click.secho(functor.get_name() if hasattr(functor, 'get_name') else str(functor), fg='bright_green')
+		self.collector.log_check_success(response, functor)
 
 	def on_failure(self, request_headers, response, functor, ex):
-		echo_time()
-		click.secho(" 🚫 Validation failed: ", fg='bright_red', nl=False)
-		click.secho(str(ex), fg='bright_white', bg="red")
-
-		echo_time()
-		click.secho(" Request headers ", fg='bright_white', bg="green", bold=True)
-		for k, v in sorted(request_headers.items(), key=lambda i: i[0]):
-			echo_time()
-			click.secho(f"  {k}", fg='bright_cyan', nl=False)
-			click.secho(f"=", fg='bright_white', nl=False)
-			click.secho(f"{v}", fg='bright_magenta')
-
-		echo_time()
-		click.secho(" Response headers ", fg='bright_white', bg="blue", bold=True)
-		for k, v in sorted(response.headers.items(), key=lambda i: i[0]):
-			echo_time()
-			click.secho(f"  {k}", fg='bright_cyan', nl=False)
-			click.secho(f"=", fg='bright_white', nl=False)
-			click.secho(f"{v}", fg='bright_magenta')
+		self.collector.log_check_failure(request_headers, response, functor, ex)
 
 
 class ReaderBS4:

@@ -7,13 +7,16 @@ import mock
 from pathlib import Path
 from urllib3_mock import Responses
 
-from .. import loader  # noqa
+from .. import loader, collector_memory
+
+from .test_urllib3 import mocked_responses
 
 
-responses = Responses('urllib3')
+def open_yaml(data):
+	return loader.Loader(collector_memory.CollectorMemory()).open_yaml(data)
 
 
-@responses.activate
+@mocked_responses.activate
 def test_request(mocker):
 
 	data = """schema: 1
@@ -30,18 +33,18 @@ checks:
       - ValidResponse
 """  # noqa
 
-	responses.add('GET', '/', body='OK', status=200, content_type='text/html')
+	mocked_responses.add('GET', '/', body='OK', status=200, content_type='text/html')
 
 	mock_on_failure = mocker.spy(loader.ProcessorV1, "on_failure")
 	mock_on_success = mocker.spy(loader.ProcessorV1, "on_success")
 
-	loader.open_yaml(data)
+	open_yaml(data)
 
 	assert mock_on_failure.call_count == 0
 	assert mock_on_success.call_count == 1
 
 
-@responses.activate
+@mocked_responses.activate
 def test_request_failure(mocker):
 
 	data = """schema: 1
@@ -58,18 +61,18 @@ checks:
       - ValidResponse
 """  # noqa
 
-	responses.add('GET', '/', body='OK', status=500, content_type='text/html')
+	mocked_responses.add('GET', '/', body='OK', status=500, content_type='text/html')
 
 	mock_on_failure = mocker.spy(loader.ProcessorV1, "on_failure")
 	mock_on_success = mocker.spy(loader.ProcessorV1, "on_success")
 
-	loader.open_yaml(data)
+	open_yaml(data)
 
 	assert mock_on_failure.call_count == 1
 	assert mock_on_success.call_count == 0
 
 
-@responses.activate
+@mocked_responses.activate
 def test_nested_requests(mocker):
 
 	data = """schema: 1
@@ -115,14 +118,14 @@ checks:
 	buf = BytesIO()
 	Image.new('RGB', (120, 120), color='red').save(buf, "JPEG")
 
-	responses.add('GET', '/', body=content, status=200, content_type='text/html; charset=utf-8')
-	responses.add('GET', '/path-to-image.jpg', body=buf.getvalue(), status=200, content_type='image/jpeg')
+	mocked_responses.add('GET', '/', body=content, status=200, content_type='text/html; charset=utf-8')
+	mocked_responses.add('GET', '/path-to-image.jpg', body=buf.getvalue(), status=200, content_type='image/jpeg')
 
 	mock_call_url = mocker.spy(loader.ProcessorV1, "call_url")
 	mock_on_failure = mocker.spy(loader.ProcessorV1, "on_failure")
 	mock_on_success = mocker.spy(loader.ProcessorV1, "on_success")
 
-	loader.open_yaml(data)
+	open_yaml(data)
 
 	assert mock_call_url.call_count == 2
 	assert mock_on_failure.call_count == 0
