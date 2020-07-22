@@ -72,14 +72,16 @@ class CollectorMemory(ICollector):
 			'error': ex
 		})
 
-	def log_open_url_response(self, url, diff, response):
+	def log_open_url_response(self, url, request_method, request_headers, diff, response):
 
 		self.data[-1]['sites'][-1]['checks'].append({
 			'type': 'open_url_response',
 			'time': datetime.datetime.now(),
 			'url': url,
 			'response': response,
-			'diff': diff
+			'diff': diff,
+			'method': request_method,
+			'headers': request_headers
 		})
 
 	def log_check_success(self, response, functor):
@@ -91,7 +93,7 @@ class CollectorMemory(ICollector):
 			'check': functor.get_name() if hasattr(functor, 'get_name') else str(functor),
 		})
 
-	def log_check_failure(self, request_headers, response, functor, ex):
+	def log_check_failure(self, url, request_method, request_headers, response, functor, ex):
 		self.has_errors = True
 
 		self.data[-1]['sites'][-1]['checks'].append({
@@ -99,5 +101,7 @@ class CollectorMemory(ICollector):
 			'time': datetime.datetime.now(),
 			'error': ex,
 			'response': response,
+			'method': request_method,
+			'headers': request_headers,
 			'check': functor.get_name() if hasattr(functor, 'get_name') else str(functor),
 		})

@@ -54,7 +54,7 @@ class CollectorConsole(ICollector):
 		self.echo_time()
 		click.secho(f"No response: {ex}", fg='bright_white', bg="red")
 
-	def log_open_url_response(self, url, diff, response):
+	def log_open_url_response(self, url, request_method, request_headers, diff, response):
 
 		self.echo_time()
 		click.secho(" → Response: ", fg="bright_magenta", nl=False)
@@ -83,7 +83,7 @@ class CollectorConsole(ICollector):
 
 		click.secho(functor.get_name() if hasattr(functor, 'get_name') else str(functor), fg='bright_green')
 
-	def log_check_failure(self, request_headers, response, functor, ex):
+	def log_check_failure(self, url, request_method, request_headers, response, functor, ex):
 		self.echo_time()
 		click.secho(" 🚫 Validation failed: ", fg='bright_red', nl=False)
 		click.secho(str(ex), fg='bright_white', bg="red")

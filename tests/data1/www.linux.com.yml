@@ -1,0 +1,64 @@
+
+schema: 1
+host: www.linux.com
+method: GET
+protocol: https
+timeout: 10.0
+headers:
+  accept-encoding: gzip, deflate, br
+  accept-language: pl,en-US;q=0.9,en;q=0.8
+  accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9
+  user-agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36
+
+checks:
+
+  - request: /
+    response:
+      - ValidResponse
+      - validator: HasHeaders
+        headers:
+          content-type: text/html; charset=utf-8
+          content-encoding: gzip
+      # - reader: ParseHTML
+      #   query:
+      #     selector: html head link[rel="shortcut icon"]
+      #     action: ReadProperty
+      #     property: href
+      #     checks:
+      #       - request:
+      #         response:
+      #         - ValidResponse
+      #         - validator: ValidImage
+      #           format: ICO
+      #         - ValidFavicon
+
+  - request: /robots.txt
+    response:
+      - ValidResponse
+      - ValidText
+      - ValidRobotsTxt
+
+  - request: /sitemap.xml
+    response:
+      - ValidResponse
+      - ValidXML
+      - reader: ParseXML
+        query:
+          selector: sitemapindex sitemap:first-of-type loc
+          action: ReadContent
+          checks:
+            - request:
+              response:
+                - ValidResponse
+                - reader: ParseXML
+                  query:
+                    selector: urlset url:first-of-type loc
+                    action: ReadContent
+                    checks:
+                      - request:
+                        response:
+                          - ValidResponse
+                          - validator: HasHeaders
+                            headers:
+                              content-type: text/html; charset=utf-8
+                              content-encoding: gzip

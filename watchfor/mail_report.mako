@@ -2,7 +2,7 @@
 <%page expression_filter="h"/>
 <%!
 %>
-<%def name="Title()">Alert</%def>
+<%def name="Title()">WatchFor results</%def>
 <head>
 	<title>${self.Title()}</title>
 
@@ -11,6 +11,28 @@
 	<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 
 	<style type="text/css">
+	.headers {
+		font-family:monospace,sans-serif;
+		font-size: 11px;
+		width: 100%;
+		color: #4d4d4d;
+		padding-left: 40px
+	}
+	.headers span.key {
+		color: #4ddd4d;
+	}
+	.headers span.value {
+		color: #ad4d4d;
+	}
+	.failure {
+		color: #ad4d4d;
+	}
+	.success {
+		color: #4ddd4d;
+	}
+	tr.error {
+		background-color: #ffbaba;
+	}
 	</style>
 </head>
 <body>
@@ -74,21 +96,22 @@
 				</tr>
 			% endfor
 			% for check in site['checks']:
-				<tr>
+				<tr class="${'error' if check['type'] == 'check_failure' else ''}">
 					<td colspan="2" style="font-family:monospace,sans-serif; font-size:11px; width:100%;color:#4d4d4d;" width="100%">
 						<code>${DateTime(check['time'])}</code>
 						% if check['type'] == 'start_check':
 							% if check['cfg'].get('title'):
 								<b>${check['cfg']['title']}</b>
 							% else:
-								<i>Unamed check</i>
+								## <i>Unamed check</i>
+
 							% endif
 						% elif check['type'] == 'check_error':
 							## TODO:
 							<code>${check}</code>
 						% elif check['type'] == 'open_url':
 							<code><b>${check['method']}</b></code>
-							<code>${check['url']}</code>
+							<code><a href="${check['url']}">${check['url']}</a></code>
 						% elif check['type'] == 'open_url_timeout':
 							## TODO:
 							<code>${check}</code>
@@ -97,14 +120,33 @@
 							[<span style="color:#4d4dfd;">${int(check['diff']*1000)}ms</span>]
 						% elif check['type'] == 'check_success':
 							## TODO:
-							<code>${check}</code>
+							<span class="success">OK - ${check['check']}</span>
 						% elif check['type'] == 'check_failure':
+							<span class="failure">OK - ${check['check']}</span>
 							## TODO:
 							<b>${check['check']}</b>
 							${check['error']}
 						% endif
 					</td>
 				</tr>
+				% if check['type'] == 'log_check_failure':
+					<tr>
+						<td colspan="2" class="headers" style="" width="100%">
+
+						<b>Request headers:</b><br/>
+						% for k, v in sorted(check['headers'].items(), key=lambda i: i[0]):
+							<span class="key">${k}</span> = <span class="value">${v}</span> <br/>
+						% endfor
+						<br/>
+
+						<b>Response headers:</b><br/>
+						% for k, v in sorted(check['response'].headers.items(), key=lambda i: i[0]):
+							<span class="key">${k}</span> = <span class="value">${v}</span> <br/>
+						% endfor
+						</td>
+					</tr>
+				% endif
+
 			% endfor
 			<tr>
 				<td colspan="2" style="font-family:Arial,sans-serif;width:100%;color:#6d6d6d;padding:20px 0 0 0;font-size: 10px;" width="100%">

@@ -1,0 +1,3 @@
+
+class ConfError(ValueError):
+	pass

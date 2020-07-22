@@ -1,3 +1,4 @@
+argh==0.26.2
 astroid==2.4.2
 attrs==19.3.0
 bandit==1.6.2
@@ -12,6 +13,8 @@ httplib2==0.18.1
 isort==4.3.21
 lazy-object-proxy==1.4.3
 lxml==4.5.2
+Mako==1.1.3
+MarkupSafe==1.1.1
 mccabe==0.6.1
 mock==4.0.2
 more-itertools==8.4.0
@@ -25,7 +28,9 @@ pycodestyle==2.6.0
 pylint==2.5.3
 pyparsing==2.4.7
 pytest==5.4.3
+pytest-mock==3.2.0
 pytest-watch==4.2.0
+python-mimeparse==1.6.0
 PyYAML==5.3.1
 ruamel.appconfig==0.5.4
 ruamel.std.argparse==0.8.3
@@ -39,6 +44,7 @@ soupsieve==2.0.1
 stevedore==3.1.0
 toml==0.10.1
 urllib3==1.25.9
+urllib3-mock==0.3.3
 watchdog==0.10.3
 wcwidth==0.2.5
 wrapt==1.12.1
