@@ -58,6 +58,7 @@ The above configuration tests a `http://github.com` site, checks only a main pag
 ```
 
 The response should look as follow:
+
 ![watchfor debug](assets/Screenshot_20200723_115951.jpeg)
 
 #### 4. Setup MTA - a mailing gateway
