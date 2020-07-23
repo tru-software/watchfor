@@ -71,7 +71,7 @@ user: "your-gmail-user@gmail.com"
 password: "xxx-xxx"
 ssl: false
 tls: true
-from: "newser1337@gmail.com"
+from: "your-gmail-user@gmail.com"
 receivers:
  - "your@email.net"
  - "another.admin@email.net"
