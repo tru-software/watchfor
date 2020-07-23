@@ -1,4 +1,17 @@
+# Deployment files
+*.egg-info
+dist
 venv
+output.html
+.eggs
+
+# Environment files
 __pycache__
 tests/__pycache__
-output.html
+.cache
+.pytest_cache
+site-packages
+build
+.cache
+*.so
+*.py[cod]

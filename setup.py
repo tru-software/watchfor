@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 
-from setuptools import setup
+import io
+import os
+from setuptools import setup, find_packages
+
+
+def read(filename):
+    filepath = os.path.join(os.path.dirname(__file__), filename)
+    with io.open(filepath, mode='r', encoding='utf-8') as f:
+        return f.read()
 
 
 setup(
@@ -20,7 +28,7 @@ setup(
     ],
     description="CLI application for monitoring online services",
     license="MIT",
-    long_description='CLI application for monitoring online services',
+    long_description=read('README.md'),
     url="https://github.com/tru-software/watchfor",
     project_urls={
         "Documentation": "CLI application for monitoring online services",
@@ -33,10 +41,13 @@ setup(
     setup_requires=["setuptools_scm"],
     use_scm_version=True,
 
-    install_requires=["python-dateutil"],
+    # packages=find_packages(),
+    install_requires=read('requirements.txt').splitlines(),
 
     entry_points={
-        'console_scripts': ['watchfor = watchfor:main']
+        'console_scripts': [
+            'watchfor = watchfor:main',
+        ]
     },
     packages=["watchfor"]
 )
