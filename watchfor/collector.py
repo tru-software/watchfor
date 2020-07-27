@@ -24,11 +24,11 @@ class ICollector(ABC):
 	def log_open_url_timeout(self, url, diff, ex):
 		pass
 
-	def log_open_url_response(self, url, diff, response):
+	def log_open_url_response(self, url, request_method, request_headers, diff, response):
 		pass
 
-	def log_check_success(self, response, functor):
+	def log_check_success(self, url, request_method, request_headers, response, functor):
 		pass
 
-	def log_check_failure(self, request_headers, response, functor, ex):
+	def log_check_failure(self, url, request_method, request_headers, response, functor, ex):
 		pass

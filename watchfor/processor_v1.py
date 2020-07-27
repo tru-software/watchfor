@@ -92,7 +92,7 @@ class ProcessorV1:
 
 						try:
 							functor()
-							self.on_success(response, functor)
+							self.on_success(url, method, headers, response, functor)
 						except ValueError as ex:
 							self.on_failure(url, method, headers, response, functor, ex)
 							break
@@ -132,8 +132,8 @@ class ProcessorV1:
 
 		return response
 
-	def on_success(self, response, functor):
-		self.collector.log_check_success(response, functor)
+	def on_success(self, url, request_method, request_headers, response, functor):
+		self.collector.log_check_success(url, request_method, request_headers, response, functor)
 
 	def on_failure(self, url, request_method, request_headers, response, functor, ex):
 		self.collector.log_check_failure(url, request_method, request_headers, response, functor, ex)

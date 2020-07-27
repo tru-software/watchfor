@@ -77,7 +77,7 @@ class CollectorConsole(ICollector):
 		else:
 			click.secho(f"[{int(diff * 1000)}ms]", fg='bright_green')
 
-	def log_check_success(self, response, functor):
+	def log_check_success(self, url, request_method, request_headers, response, functor):
 		self.echo_time()
 		click.secho(" ✓ Success validation: ", fg='green', nl=False)
 

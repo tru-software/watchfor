@@ -84,11 +84,17 @@ class CollectorMemory(ICollector):
 			'headers': request_headers
 		})
 
-	def log_check_success(self, response, functor):
+	def log_check_success(self, url, request_method, request_headers, response, functor):
 
 		self.data[-1]['sites'][-1]['checks'].append({
-			'type': 'check_success',
 			'time': datetime.datetime.now(),
+			'type': 'check_success',
+
+			'url': url,
+			'method': request_method,
+			'headers': request_headers,
+
+			'danger': 1,  # TODO: implement
 			'response': response,
 			'check': functor.get_name() if hasattr(functor, 'get_name') else str(functor),
 		})
@@ -97,11 +103,33 @@ class CollectorMemory(ICollector):
 		self.has_errors = True
 
 		self.data[-1]['sites'][-1]['checks'].append({
-			'type': 'check_failure',
 			'time': datetime.datetime.now(),
-			'error': ex,
-			'response': response,
+			'type': 'check_failure',
+
+			'url': url,
 			'method': request_method,
 			'headers': request_headers,
+
+			'danger': 1,  # TODO: implement
+			'response': response,
+			'error': ex,
 			'check': functor.get_name() if hasattr(functor, 'get_name') else str(functor),
 		})
+
+
+class MergeCollectors(ICollector):
+
+	def __init__(self, *args):
+		self._collectors = args
+
+	def __getattribute__(self, name):
+		if name not in ICollector.__dict__:
+			return object.__getattribute__(self, name)
+
+		def tmp(*args, **kwargs):
+			latest = None
+			for i in self._collectors:
+				latest = getattr(i, name)(*args, **kwargs)
+			return latest
+
+		return tmp

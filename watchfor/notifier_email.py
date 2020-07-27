@@ -7,8 +7,6 @@ from email.header import Header
 
 from smtplib import SMTP, SMTP_SSL, SMTPNotSupportedError
 
-from .notifier_base import NotifierBase
-
 
 DEFAULT_CHARSET = 'utf-8'
 Charset.add_charset(DEFAULT_CHARSET, Charset.SHORTEST, Charset.BASE64, DEFAULT_CHARSET)
@@ -22,10 +20,13 @@ def _force_ascii(s):
 		return Header(s, 'utf-8').encode()
 
 
-class EMailNotifier(NotifierBase):
+class EMailNotifier:
 
-	def __init__(self, cfg):
+	def __init__(self, cfg, subject="WatchFor ALERT!"):
 		super().__init__()
+
+		# TODO: sendmail support
+		# https://stackoverflow.com/questions/73781/sending-mail-via-sendmail-from-python
 
 		self._server = cfg["host"]
 		self._port = int(cfg.get("port", 587))
@@ -35,41 +36,39 @@ class EMailNotifier(NotifierBase):
 		self._tls = cfg["tls"]
 		self._from = cfg["from"]
 
-		self._receivers = cfg["receivers"]
+		self._subject = subject
 
-	def send(self, content, receivers=None):
+	def send(self, receiver, content):
 
-		for receiver in receivers or self._receivers:
+		from_ = self._from
 
-			from_ = self._from
+		email = self.compose_email(
+			subject=self._subject,
+			from_=from_,
+			to=receiver,
+			html_content=content
+		)
+		SMTP_cls = SMTP_SSL if self._ssl else SMTP
 
-			email = self.componse_email(
-				subject="WatchFor ALERT!",
-				from_=from_,
-				to=receiver,
-				html_content=content
-			)
-			SMTP_cls = SMTP_SSL if self._ssl else SMTP
-
-			with SMTP_cls(self._server, self._port) as smtp:
+		with SMTP_cls(self._server, self._port) as smtp:
+			smtp.ehlo()
+			if self._tls and not self._ssl:
+				smtp.starttls()
 				smtp.ehlo()
-				if self._tls and not self._ssl:
-					smtp.starttls()
-					smtp.ehlo()
 
-				if self._user and self._password:
-					smtp.login(self._user, self._password)
+			if self._user and self._password:
+				smtp.login(self._user, self._password)
 
-				content = email.as_string()
+			content = email.as_string()
 
-				if smtp.has_extn('smtputf8'):
-					smtp.sendmail(from_, receiver, content, mail_options=["smtputf8"])
-				else:
-					smtp.sendmail(_force_ascii(from_), _force_ascii(receiver), content)
+			if smtp.has_extn('smtputf8'):
+				smtp.sendmail(from_, receiver, content, mail_options=["smtputf8"])
+			else:
+				smtp.sendmail(_force_ascii(from_), _force_ascii(receiver), content)
 
-				smtp.quit()
+			smtp.quit()
 
-	def componse_email(self, subject, from_, to, html_content, reply_to=None, text_content=None):
+	def compose_email(self, subject, from_, to, html_content, reply_to=None, text_content=None):
 
 		msgRoot = MIMEMultipart('related')
 		msgRoot['Subject'] = Header(subject, 'utf-8')
