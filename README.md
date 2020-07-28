@@ -1,11 +1,14 @@
 # watchfor
 
-CLI application for monitoring online services
+CLI application for monitoring the http based, online services.
+
+
+The `watchfor` detects undesired responses from monitored services. Failures are reported via emails so far (more options will be implemented soon).
 
 ## Features
 * checks responses of the HTTP/HTTPS services
 * YAML configuration
-* notifications via emails in case of failure
+* notifications via emails
 * debuging tool for configuration tests
 * HTTP headers validation
 * HTTP status validation
@@ -15,25 +18,34 @@ CLI application for monitoring online services
 * notifies once when service goes down
 * TODO: notifies when service goes up
 
-## Installation & usage
+## Installation, setup and usage
 
 #### 1. Install `watchfor` in your local [python virtual enviroment](https://docs.python.org/3/library/venv.html):
+> :information_source: The `./watchforapp` is a non-existing directory path where the application will be installed.
 
 ```bash
-python3 -m venv ./watchforapp
+python3.8 -m venv ./watchforapp
 ./watchforapp/bin/pip install -e 'git+https://github.com/tru-software/watchfor#egg=watchfor'
 ```
 
+> :ballot_box_with_check: This is how it should look like:
+![installation](assets/Screenshot_20200728_103022.jpeg)
+*[...]*
+![installation](assets/Screenshot_20200728_103318.jpeg)
+
 #### 2. Create a simple configuration
 
-> :+1: Configuration directories are designed to be under repository version control, like a `git`.
+> :information_source: A configuration directory is a place where definitions of monitored services is placed.
+It should be placed somewhere else then installation of the application (`./watchforapp`).
+
+> :+1: It is good idea to place this directory under a repository of source version control, like a `git`.
 
 ```bash
 mkdir ~/my_services
-git init ~/my_services  # optional, or just put this directory under repo and commit&push configs
+(cd ~/my_services; git init .)  # optional, or just get this directory from an exiting repo
 ```
 
-Create a config file for **service** `~/my_services/github.com.yml` and fill with a following content ([YAML format](https://en.wikipedia.org/wiki/YAML)):
+Create a config file for an **online service** `~/my_services/github.com.yml` and fill with a following content ([YAML format](https://en.wikipedia.org/wiki/YAML)):
 ```yml
 schema: 1
 host: github.com
@@ -51,7 +63,7 @@ checks:
       - ValidResponse
 ```
 
-The above configuration tests a `http://github.com` site, checks only a main page `/` and expects a valid http response. See `tests/data1` for more complex examples and a documentation (will be available soon) for all options.
+The above configuration tests a `http://github.com` site, checks a main page `/` and expects to get a valid http response. See `tests/data1` for more complex examples and a documentation (will be available soon) for all options.
 
 #### 3. Test your configuration
 
@@ -59,13 +71,39 @@ The above configuration tests a `http://github.com` site, checks only a main pag
 ./watchforapp/bin/watchfor debug -d ~/my_services/
 ```
 
-The response should look as follow:
 
-![watchfor debug](assets/Screenshot_20200723_115951.jpeg)
+> :ballot_box_with_check: This is how it should look like:
+![watchfor debug](assets/Screenshot_20200728_103739.jpeg)
 
-#### 4. Setup MTA - a mailing gateway
+#### 4. Alarms
 
-MTA configuration is defined in `_mta.yml` file in your configuration directory. The content of this file looks as follow ([YAML format](https://en.wikipedia.org/wiki/YAML)):
+Alarms, the notifications of failures, are definied by a `_alarms.yml` file in the configuration directory ([YAML format](https://en.wikipedia.org/wiki/YAML)).
+The basic configuration contains a list of actions to be taken when a `check` fails:
+```yml
+schema: 1
+default:
+  when:
+    # for cases with danger=0 (or more)
+    - danger: 0
+      # sound an alarm after 3 fails in the row
+      fails: 3
+      # mark a service as recovered after 2 raises in the row
+      raises: 2
+      # what should happen when this alarm is raise: just send an email.
+      alarms:
+        mail:
+         - "test@example.com"
+```
+
+The configuration provides some kind of mitigation to cover single and not persistant failure, with a `fails` and `raises` counters.
+
+> :zap: TODO: document a `danger` levels.
+
+> :zap: TODO: document different types of actions.
+
+#### 5. Setup MTA - a mailing gateway
+
+MTA configuration is defined by a `_mta.yml` file in the configuration directory. The content of this file looks as follow ([YAML format](https://en.wikipedia.org/wiki/YAML)):
 ```yml
 host: "smtp.gmail.com"
 port: 587
@@ -74,14 +112,26 @@ password: "xxx-xxx"
 ssl: false
 tls: true
 from: "your-gmail-user@gmail.com"
-receivers:
- - "your@email.net"
- - "another.admin@email.net"
 ```
 
 > :zap: TODO: configuration for a local `sendmail`.
 
-#### 5. Run PRODUCTION checks
+To test a `_mta.yml` configuration, change a **online service** `~/my_services/github.com.yml` to have a failure and run `debug` command with `-e <email>` parameter:
+
+```bash
+./watchforapp/bin/watchfor debug -d ~/my_services/ -e "test@example.com"
+```
+
+> :ballot_box_with_check: This is how it should look like:
+![watchfor debug](assets/Screenshot_20200728_103939.jpeg)
+
+> :ballot_box_with_check: The email with notofication looks like:
+![watchfor debug](assets/Screenshot_20200728_161223.jpeg)
+
+> :information_source: The `debug` command with a `-e` parameter always sends notifications in case of any failure. The `check` uses a `results manager` to tracks failures to prevent spamming of the same notifications.
+
+
+#### 6. Run PRODUCTION checks
 
 > :zap: TODO: configuration for `crontab`
 
@@ -313,7 +363,7 @@ Clone `watchfor` repo from github and create local [python virtual enviroment](h
 ```bash
 git clone 'https://github.com/tru-software/watchfor'
 cd watchfor
-python3 -m venv ./venv
+python3.8 -m venv ./venv
 ./venv/bin/pip install -r requirements.txt
 ./venv/bin/pip install -r requirements-dev.txt
 ```
