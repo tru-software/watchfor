@@ -23,7 +23,7 @@ pluggy==0.13.1
 py==1.9.0
 pyparsing==2.4.7
 python-mimeparse==1.6.0
-PyYAML==5.3.1
+PyYAML==5.4
 ruamel.appconfig==0.5.4
 ruamel.std.argparse==0.8.3
 ruamel.std.pathlib==0.6.4
