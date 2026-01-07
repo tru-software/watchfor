@@ -2,7 +2,6 @@
 
 CLI application for monitoring the http based, online services.
 
-
 The `watchfor` detects undesired responses from monitored services. Failures are reported via emails so far (more options will be implemented soon).
 
 ## Features
