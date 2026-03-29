@@ -30,7 +30,7 @@ pytest==5.4.3
 pytest-mock==3.2.0
 pytest-watch==4.2.0
 python-mimeparse==1.6.0
-PyYAML==5.3.1
+PyYAML==5.4
 ruamel.appconfig==0.5.4
 ruamel.std.argparse==0.8.3
 ruamel.std.pathlib==0.6.4
